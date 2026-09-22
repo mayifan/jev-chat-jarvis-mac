@@ -40,7 +40,7 @@ uv run python probe/bootstrap_regression.py      # 两种启动入口的离线�
 
 ## 配置
 
-两层、两个 key、**都可以不填**：判断层不填走本地 decider-2b（首次下载约 7 GB）；生成层打包版内置共享 key，不配也能出候选。全部配置在一个 env 文件（**不提供第二种格式**）：
+两层、两个 key、**都可以不填**：判断层不填走本地 decider-2b（首次约 3.5–4 GB，请用菜单「本地判断模型…」下载）；生成层打包版内置共享 key，不配也能出候选。全部配置在一个 env 文件（**不提供第二种格式**）：
 
 ```bash
 mkdir -p ~/.config/jev-jarvis
@@ -59,6 +59,7 @@ chmod 600 ~/.config/jev-jarvis/env
 ```
 
 - **应用内配置界面**（菜单栏 J →「配置 Key / 模型…」）：可视化编辑同一份 env，支持自定义端点、动态探测模型列表（失败回退手填）、「测试连接」、Key 掩码；保存仍写 `~/.config/jev-jarvis/env`（权限 600，尽量保留注释），**重启后生效**
+- **本地判断模型下载**（菜单栏 J →「本地判断模型…」）：对 `Mapika/decider-2b` 显示下载进度（已下/总量、速度、ETA、当前文件），支持开始/继续、暂停、取消；取消只停网络传输、保留 HF 缓存未完成文件以便续传；另有「清除缓存」。缓存已就绪时显示「已就绪」，启动预热不再静默拉模型；未下载时状态行提示打开该菜单，而不会在后台黑盒下载数 GB
 - **凭据解析以 key 为准**：提供 key 的来源同时决定端点和模型。实测可用：DeepSeek `deepseek-chat`（最快）；智谱 `glm-4-flash`（换 `ANTHROPIC_API_KEY`/`ANTHROPIC_BASE_URL`/`ANTHROPIC_MODEL`，两组都填 OpenAI 组优先）；本地 Ollama `qwen2.5:7b`（完全不出网）
 - **别用 thinking 模型**：思考吃光 `max_tokens`，候选 0 条，面板只报「候选生成失败」——DeepSeek 认准 `deepseek-chat`
 - **自定义话术**：env 加一行 `JEV_TONES`（`|` 分隔、每条「名字=说明」，同名覆盖内置，重启生效），如 `摸鱼大师=像资深摸鱼选手，把活推得漂亮又不失礼`；说明写清「什么语气 + 别变成什么」最管用
@@ -68,7 +69,7 @@ chmod 600 ~/.config/jev-jarvis/env
 
 | 内容 | 位置 | 大小 | 清理 |
 |---|---|---|---|
-| 判断层本地模型 `decider-2b`（不配判断层 key 才会下载，判断+排序共用） | `~/.cache/huggingface/hub/models--Mapika--decider-2b` | ~7 GB | `rm -rf ~/.cache/huggingface/hub/models--Mapika--decider-2b`；之后走本地判断会重新下载 |
+| 判断层本地模型 `decider-2b`（不配判断层 key 才需要；判断+排序共用） | `~/.cache/huggingface/hub/models--Mapika--decider-2b`（尊重 `HF_HOME` / `HUGGINGFACE_HUB_CACHE`） | ~3.5–4 GB | 菜单栏 **本地判断模型…** 里「清除缓存」，或手动 `rm -rf` 该目录；暂停/取消下载会保留未完成文件以便续传 |
 | Python 运行环境（venv） | `~/Library/Application Support/jev-jarvis/venv` | ~0.7 GB | 删除 .app 不会连带删它，需手动删 |
 
 生成层配 Ollama 的话模型在 Ollama 自己的目录（`~/.ollama`），非本项目下载。
@@ -78,7 +79,7 @@ chmod 600 ~/.config/jev-jarvis/env
 - 收发方向靠文字位置判断：横跨左右或居中、无法确认方向的文本标「方向未确认」，**不作为回复目标**（很宽的对方消息可能被跳过）；只有明确识别为「对方」的消息才触发判断与生成，只有自己消息时面板显示「等待可确认的对方消息…」
 - 图片/表情包读不出内容；引用回复当普通文本；公众号卡片可能被当消息解读；微信全屏布局下识别可能失效（布局常量待动态化，见 #17）
 - 微信改版会让布局常量失效（`src/perception.py` 顶部常量需重新校准）；多窗口优先识别主窗口「微信 / WeChat」
-- 启动后第一条判断慢是正常现象（本地模型预热）；不对劲先看日志（分阶段耗时、**不含消息正文**，可放心贴 issue）：`tail -40 ~/Library/Logs/jev-jarvis.log`
+- 启动后第一条判断慢是正常现象（本地模型预热；若尚未下载会提示打开「本地判断模型…」）；不对劲先看日志（分阶段耗时、**不含消息正文**，可放心贴 issue）：`tail -40 ~/Library/Logs/jev-jarvis.log`
 
 ## 输入区检测框与填入
 

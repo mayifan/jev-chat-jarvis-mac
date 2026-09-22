@@ -219,7 +219,9 @@ class HudController(NSObject):
         self._judged_once = False      # first judge call includes the local model load
         self._read_once = False        # first OCR call includes Vision's own load
         self._last_skip_reason = None
-        self.judge = make_judge()
+        # Never silently pull several GB from Hugging Face inside the HUD;
+        # missing weights surface as status + the download panel.
+        self.judge = make_judge(allow_hub_download=False)
         self.generator = Generator()
         # 话术: per-slot tone selection. A slot on 不用 contributes no request and no rows,
         # so the panel is exactly as tall as the groups actually in use.
@@ -531,6 +533,7 @@ class HudController(NSObject):
             ("YOLO 检测框", "toggleBoxes:", ""),
             ("立即重新分析", "reanalyze:", ""),
             ("配置 Key / 模型…", "openConfig:", ","),
+            ("本地判断模型…", "openDownloadModel:", ""),
         ):
             menu.addItemWithTitle_action_keyEquivalent_(title, action, key)
         menu.addItem_(AppKit.NSMenuItem.separatorItem())
@@ -929,6 +932,11 @@ class HudController(NSObject):
         """Menu-bar entry for the in-app env editor (issue #18, fork)."""
         import config_panel  # noqa: WPS433 — AppKit-only; keep hud import light
         config_panel.open_config_panel(self)
+
+    def openDownloadModel_(self, sender):
+        """Menu-bar entry for controllable local decider-2b download."""
+        import download_panel  # noqa: WPS433 — AppKit-only; keep hud import light
+        download_panel.open_download_panel(self)
 
     def quitApp_(self, sender):
         AppKit.NSApplication.sharedApplication().terminate_(None)
@@ -1655,6 +1663,11 @@ class HudController(NSObject):
         if not self._show_boxes and self._ov_panel.isVisible():
             self._ov_panel.orderOut_(None)
 
+    def warmStatus_(self, text):
+        """Main-thread status update from the warm-up worker."""
+        if isinstance(text, str) and text:
+            self._render("status", text, PALETTE["amber"])
+
     # --------------------------------------------------------------- warm-up
     @objc.python_method
     def _warm(self):
@@ -1675,10 +1688,33 @@ class HudController(NSObject):
         else:
             _log("预热 OCR 失败 · 首次读屏会稍慢，不影响使用")
 
+        # TypeSafe / FallbackJudge: warm() is a no-op (nothing local to load).
+        if type(self.judge).__name__ == "FallbackJudge":
+            try:
+                self.judge.warm()
+            except Exception:
+                pass
+            return
+
+        # Local weights: only warm (load + dummy forward) when the HF cache is ready.
+        # Missing cache used to call from_pretrained which silently downloaded several GB
+        # with no HUD progress — now we surface a status and leave download to the panel.
+        import model_download as _md
+        repo = getattr(self.judge, "repo", _md.DEFAULT_REPO)
+        if not _md.is_ready(repo):
+            _log("预热跳过 · 本地模型未下载")
+            self.performSelectorOnMainThread_withObject_waitUntilDone_(
+                "warmStatus:", "本地模型未下载 · 打开菜单「本地判断模型…」下载", False)
+            return
+
         try:
             self.judge.warm()
         except Exception as e:
             _log(f"预热判断模型失败 {type(e).__name__}: {str(e)[:60]}")
+            self.performSelectorOnMainThread_withObject_waitUntilDone_(
+                "warmStatus:",
+                f"本地模型加载失败 · {type(e).__name__}",
+                False)
         else:
             self._judged_once = True  # same: the load is paid, the first judge is steady-state
             _log(f"预热 判断模型就绪 · 总耗时 {(time.perf_counter() - t0) * 1000:.0f}ms")

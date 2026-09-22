@@ -58,7 +58,8 @@ ACTION_MAP = {
 class Judge:
     """Wraps a decoder-only decision model; lazy-loads on first use."""
 
-    def __init__(self, repo: str = "Mapika/decider-2b", device: str | None = None):
+    def __init__(self, repo: str = "Mapika/decider-2b", device: str | None = None,
+                 *, allow_hub_download: bool = True):
         import torch
 
         self.torch = torch
@@ -66,6 +67,9 @@ class Judge:
             device = "mps" if torch.backends.mps.is_available() else "cpu"
         self.device = device
         self.repo = repo
+        # HUD sets False so missing cache never silently downloads several GB;
+        # CLI (`python src/judge.py`) keeps the default True.
+        self.allow_hub_download = allow_hub_download
         self.temperature = 1.3
         self._loaded = False
         # RLock, not Lock: warm() holds it across the whole dummy forward, and judge()
@@ -86,14 +90,19 @@ class Judge:
             from transformers import AutoModelForCausalLM, AutoTokenizer
 
             t = self.torch
-            self.tok = AutoTokenizer.from_pretrained(self.repo)
+            load_kw = {}
+            if not self.allow_hub_download:
+                load_kw["local_files_only"] = True
+            self.tok = AutoTokenizer.from_pretrained(self.repo, **load_kw)
             # float16, not bfloat16: MPS takes the slow path for bf16 (limited op coverage) and
             # it costs exactly 2x here — measured on this model, same prompt, three runs each:
             # bf16 1352/1393/1467 ms vs fp16 734/745/827 ms. The judge is the single biggest
             # steady-state cost in the pipeline, so this is the difference between a ~3 s and a
             # ~4 s reply. CPU has no fp16 win, so it stays fp32.
             dtype = t.float16 if self.device == "mps" else t.float32
-            self.model = AutoModelForCausalLM.from_pretrained(self.repo, dtype=dtype).to(self.device).eval()
+            self.model = (AutoModelForCausalLM
+                          .from_pretrained(self.repo, dtype=dtype, **load_kw)
+                          .to(self.device).eval())
             self._letters = [self.tok.encode(c, add_special_tokens=False)[0]
                              for c in "ABCDEFGHIJKLMNOPQRSTUVWXYZ"]
             self._loaded = True
@@ -215,16 +224,17 @@ class FallbackJudge:
     verdict carries which backend produced it.
     """
 
-    def __init__(self):
+    def __init__(self, *, allow_hub_download: bool = True):
         import judge_jev
         self.primary = judge_jev.JevJudge()
         self.local = None
         self.fell_back = False
         self.reason = ""
+        self.allow_hub_download = allow_hub_download
 
     def _fallback(self):
         if self.local is None:
-            self.local = Judge()
+            self.local = Judge(allow_hub_download=self.allow_hub_download)
         return self.local
 
     def judge(self, message: str, context: str | None = None) -> dict:
@@ -251,12 +261,12 @@ class FallbackJudge:
         return None
 
 
-def make_judge():
+def make_judge(*, allow_hub_download: bool = True):
     """Jev when a key is configured, otherwise the local decider-2b."""
     try:
         import judge_jev
         if judge_jev.jev_configured():
-            return FallbackJudge()
+            return FallbackJudge(allow_hub_download=allow_hub_download)
     except Exception:
         pass
-    return Judge()
+    return Judge(allow_hub_download=allow_hub_download)
