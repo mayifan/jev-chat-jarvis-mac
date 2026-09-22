@@ -1710,11 +1710,14 @@ class HudController(NSObject):
         try:
             self.judge.warm()
         except Exception as e:
-            _log(f"预热判断模型失败 {type(e).__name__}: {str(e)[:60]}")
+            msg = str(e)
+            _log(f"预热判断模型失败 {type(e).__name__}: {msg[:60]}")
+            # Partial HF cache (tokenizer only) used to look "ready" and then explode here.
+            hint = "本地模型加载失败"
+            if "pytorch" in msg.lower() or "safetensors" in msg.lower() or "does not appear" in msg:
+                hint = "本地模型未下完 · 打开菜单「本地判断模型…」继续下载"
             self.performSelectorOnMainThread_withObject_waitUntilDone_(
-                "warmStatus:",
-                f"本地模型加载失败 · {type(e).__name__}",
-                False)
+                "warmStatus:", hint, False)
         else:
             self._judged_once = True  # same: the load is paid, the first judge is steady-state
             _log(f"预热 判断模型就绪 · 总耗时 {(time.perf_counter() - t0) * 1000:.0f}ms")

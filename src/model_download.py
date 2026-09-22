@@ -100,19 +100,25 @@ def _has_weight_files(snap_dir: Path) -> bool:
 
 
 def is_ready(repo_id: str = DEFAULT_REPO) -> bool:
-    """True when a complete local snapshot with weights is available (no network)."""
+    """True when a complete local snapshot with *weights* is available (no network).
+
+    Important: huggingface_hub's ``snapshot_download(..., local_files_only=True)`` can
+    succeed when only tokenizer/config are cached and weight files are still missing
+    (or incomplete). If a snapshots/ tree exists, only weight presence counts as ready.
+    """
+    root = model_cache_dir(repo_id)
+    snaps = root / "snapshots"
+    if snaps.is_dir():
+        return any(
+            snap.is_dir() and _has_weight_files(snap) for snap in snaps.iterdir()
+        )
     try:
         from huggingface_hub import snapshot_download
 
-        snapshot_download(repo_id, local_files_only=True)
-        return True
+        path = snapshot_download(repo_id, local_files_only=True)
+        return _has_weight_files(Path(path))
     except Exception:
-        pass
-    root = model_cache_dir(repo_id)
-    snaps = root / "snapshots"
-    if not snaps.is_dir():
         return False
-    return any(_has_weight_files(snap) for snap in snaps.iterdir())
 
 
 def estimate_partial_bytes(repo_id: str = DEFAULT_REPO) -> int:

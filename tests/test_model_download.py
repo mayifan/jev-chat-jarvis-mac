@@ -72,6 +72,21 @@ class ReadinessTests(unittest.TestCase):
                 os.environ.pop("HF_HOME", None)
                 self.assertFalse(md.is_ready("Mapika/decider-2b"))
 
+    def test_is_ready_false_tokenizer_only_snapshot(self):
+        """Config+tokenizer without weights must NOT count as ready (real HF partial cache)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            import os
+            os.environ["HUGGINGFACE_HUB_CACHE"] = tmp
+            os.environ.pop("HF_HOME", None)
+            snap = (
+                Path(tmp) / "models--Mapika--decider-2b" / "snapshots" / "abcd"
+            )
+            snap.mkdir(parents=True)
+            (snap / "config.json").write_text("{}")
+            (snap / "tokenizer.json").write_text("{}")
+            (snap / "tokenizer_config.json").write_text("{}")
+            self.assertFalse(md.is_ready("Mapika/decider-2b"))
+
     def test_is_ready_true_with_weight_snapshot(self):
         with tempfile.TemporaryDirectory() as tmp:
             import os
@@ -83,9 +98,7 @@ class ReadinessTests(unittest.TestCase):
             snap.mkdir(parents=True)
             (snap / "model.safetensors").write_bytes(b"fake")
             (snap / "config.json").write_text("{}")
-            # Avoid network: patch snapshot_download to fail so fallback path runs
-            with patch("huggingface_hub.snapshot_download", side_effect=OSError("offline")):
-                self.assertTrue(md.is_ready("Mapika/decider-2b"))
+            self.assertTrue(md.is_ready("Mapika/decider-2b"))
 
 
 class StateMachineTests(unittest.TestCase):
