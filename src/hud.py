@@ -530,6 +530,7 @@ class HudController(NSObject):
             ("暂停读屏", "togglePause:", ""),
             ("YOLO 检测框", "toggleBoxes:", ""),
             ("立即重新分析", "reanalyze:", ""),
+            ("配置 Key / 模型…", "openConfig:", ","),
         ):
             menu.addItemWithTitle_action_keyEquivalent_(title, action, key)
         menu.addItem_(AppKit.NSMenuItem.separatorItem())
@@ -923,6 +924,11 @@ class HudController(NSObject):
         self.last_seen = None
         self.analyzed_text = None
         self._render("status", "重新分析中…", PALETTE["muted"])
+
+    def openConfig_(self, sender):
+        """Menu-bar entry for the in-app env editor (issue #18, fork)."""
+        import config_panel  # noqa: WPS433 — AppKit-only; keep hud import light
+        config_panel.open_config_panel(self)
 
     def quitApp_(self, sender):
         AppKit.NSApplication.sharedApplication().terminate_(None)

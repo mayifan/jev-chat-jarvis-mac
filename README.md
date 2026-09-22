@@ -58,6 +58,7 @@ ENV
 chmod 600 ~/.config/jev-jarvis/env
 ```
 
+- **应用内配置界面**（菜单栏 J →「配置 Key / 模型…」）：可视化编辑同一份 env，支持自定义端点、动态探测模型列表（失败回退手填）、「测试连接」、Key 掩码；保存仍写 `~/.config/jev-jarvis/env`（权限 600，尽量保留注释），**重启后生效**
 - **凭据解析以 key 为准**：提供 key 的来源同时决定端点和模型。实测可用：DeepSeek `deepseek-chat`（最快）；智谱 `glm-4-flash`（换 `ANTHROPIC_API_KEY`/`ANTHROPIC_BASE_URL`/`ANTHROPIC_MODEL`，两组都填 OpenAI 组优先）；本地 Ollama `qwen2.5:7b`（完全不出网）
 - **别用 thinking 模型**：思考吃光 `max_tokens`，候选 0 条，面板只报「候选生成失败」——DeepSeek 认准 `deepseek-chat`
 - **自定义话术**：env 加一行 `JEV_TONES`（`|` 分隔、每条「名字=说明」，同名覆盖内置，重启生效），如 `摸鱼大师=像资深摸鱼选手，把活推得漂亮又不失礼`；说明写清「什么语气 + 别变成什么」最管用
